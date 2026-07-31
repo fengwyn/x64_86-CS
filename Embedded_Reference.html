@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en" class="mode-stm32">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Embedded Security Bench Reference — generic core + platform overlays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FCFCFA; --ink:#16181C; --meta:#5C626B; --hair:#D9DBDE; --rule:#B4B8BE;
+  --norm:#12507E; --adv:#98241F; --advwash:#F8EFED; --normwash:#EDF2F7; --platwash:#F2F3F0;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.42;font-feature-settings:"kern" 1,"liga" 0}
+.wrap{max-width:1500px;margin:0 auto;padding:0 20px 60px}
+
+/* ---------- platform switching ---------- */
+.plat{display:none}
+html.mode-stm32   .p-stm32  {display:block}
+html.mode-zynq    .p-zynq   {display:block}
+html.mode-generic .p-generic{display:block}
+html.mode-stm32 .e.p-stm32,html.mode-zynq .e.p-zynq,html.mode-generic .e.p-generic{display:grid}
+html.mode-stm32 span.p-stm32,html.mode-zynq span.p-zynq,html.mode-generic span.p-generic{display:inline}
+html.mode-stm32 li.p-stm32,html.mode-zynq li.p-zynq,html.mode-generic li.p-generic{display:list-item}
+.switch{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--rule);padding:9px 0 8px;margin-bottom:22px}
+.switch-row{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.switch-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--meta);margin-right:2px}
+.modebtn{
+  font-family:var(--mono);font-size:11px;letter-spacing:.03em;
+  background:transparent;color:var(--meta);border:1px solid var(--rule);
+  padding:5px 11px;cursor:pointer;line-height:1.2;
+}
+.modebtn:hover{border-color:var(--ink);color:var(--ink)}
+.modebtn:focus-visible{outline:2px solid var(--norm);outline-offset:2px}
+.modebtn[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper);font-weight:500}
+.jump{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase}
+.jump a{color:var(--meta);text-decoration:none;border-bottom:1px solid transparent}
+.jump a:hover{color:var(--adv);border-bottom-color:var(--adv)}
+.jump a:focus-visible{outline:2px solid var(--norm);outline-offset:2px}
+
+/* ---------- masthead ---------- */
+.masthead{padding:6px 0 20px;border-bottom:2px solid var(--ink);margin-bottom:22px}
+.masthead h1{font-family:var(--cond);font-weight:700;font-size:40px;line-height:1.02;margin:0 0 6px;letter-spacing:-.012em}
+.masthead h1 em{font-style:normal;color:var(--adv)}
+.subtitle{font-family:var(--cond);font-size:16px;font-weight:500;color:var(--meta);margin:0 0 16px;max-width:66ch}
+.control{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 20px;font-family:var(--mono);font-size:10.5px;line-height:1.35;border-top:1px solid var(--hair);padding-top:10px}
+.control dt{color:var(--meta);text-transform:uppercase;letter-spacing:.07em;font-size:9.5px;margin-bottom:2px}
+.control dd{margin:0;font-weight:500}
+.control dd.flag{color:var(--adv)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 20px;align-items:center;margin:16px 0 4px;padding:9px 12px;background:var(--normwash);font-size:11.5px}
+.legend b{font-family:var(--mono);font-size:10px;letter-spacing:.06em}
+
+/* ---------- sheets ---------- */
+.sheet{margin-top:32px}
+.sheet-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:1.5px solid var(--ink);padding-bottom:6px;margin-bottom:14px}
+.sheet-num{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--paper);background:var(--ink);padding:3px 7px}
+.sheet-head h2{font-family:var(--cond);font-weight:700;font-size:25px;margin:0;letter-spacing:-.008em}
+.sheet-head .kicker{font-family:var(--mono);font-size:10.5px;color:var(--meta);letter-spacing:.05em;margin-left:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:4px 26px;align-items:start}
+.block{break-inside:avoid;padding:10px 0 12px;border-top:1px solid var(--rule)}
+.block h3{font-family:var(--cond);font-weight:600;font-size:15.5px;margin:0 0 7px;display:flex;gap:9px;align-items:baseline;flex-wrap:wrap}
+.block h3 .n{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--norm);letter-spacing:.03em}
+.block.wide{grid-column:1/-1}
+.lead{font-size:12px;color:var(--meta);margin:-2px 0 8px;max-width:80ch}
+
+/* ---------- entries + margin rail ---------- */
+.e{display:grid;grid-template-columns:82px 1fr;gap:0 12px;padding:5px 0;border-top:1px solid var(--hair)}
+.e:first-of-type{border-top:none}
+.rail{font-family:var(--mono);font-size:9px;line-height:1.55;text-align:right;color:var(--meta);padding-top:2.5px;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.rail .cwe{color:var(--adv)}
+.rail .std{color:var(--norm)}
+.e .t{font-family:var(--mono);font-size:12px;font-weight:500}
+.e .body{font-size:12.3px}
+.e p{margin:0}
+.atk,.mit,.note{display:block;margin-top:3px;font-size:11.6px}
+.atk{color:#3B2422}
+.atk::before{content:"ATTACK ";font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--adv)}
+.mit::before{content:"DO ";font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--norm)}
+.note::before{content:"NOTE ";font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--meta)}
+code{font-family:var(--mono);font-size:.92em;background:#F0F0EC;padding:0 3px;border-radius:2px}
+.atk code,.mit code,.panel code{background:#E9E9E4}
+
+/* ---------- platform panel ---------- */
+.panel{background:var(--platwash);border-left:3px solid var(--ink);padding:8px 11px 9px;margin:8px 0 2px}
+.panel .chip{font-family:var(--mono);font-size:8.8px;letter-spacing:.11em;text-transform:uppercase;color:var(--paper);background:var(--ink);padding:2px 6px;display:inline-block;margin-bottom:5px}
+.panel .e{border-top-color:#C9CBC5}
+.panel .e:first-of-type{border-top:none}
+article.block.panel{border-top:3px solid var(--ink);padding-top:9px}
+article.block.panel h3{margin-top:2px}
+
+/* ---------- tables / maps ---------- */
+table{width:100%;border-collapse:collapse;font-size:11.4px;margin:6px 0 2px}
+caption{text-align:left;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--meta);padding-bottom:4px}
+th{text-align:left;font-family:var(--cond);font-weight:600;font-size:11.5px;border-bottom:1px solid var(--ink);padding:3px 8px 3px 0;vertical-align:bottom}
+td{padding:3px 8px 3px 0;border-bottom:1px solid var(--hair);vertical-align:top}
+td.m,th.m{font-family:var(--mono);font-size:10.5px}
+td.bad{color:var(--adv)}
+td.good{color:var(--norm)}
+tr:last-child td{border-bottom:none}
+.map{font-family:var(--mono);font-size:10.2px;line-height:1.5;margin:6px 0 0}
+.map div{display:grid;grid-template-columns:100px 1fr;gap:10px;padding:1.5px 0;border-bottom:1px dotted var(--hair)}
+.map .a{color:var(--norm)}
+.map .x{color:var(--adv)}
+
+/* ---------- drill / correction ---------- */
+.drill{background:var(--advwash);padding:11px 14px;break-inside:avoid;border-top:2px solid var(--adv)}
+.drill h3{margin-top:0}
+.drill h3 .n{color:var(--adv)}
+.drill ol{margin:0;padding-left:18px}
+.drill li{margin-bottom:7px;font-size:12.2px}
+.drill .a{display:block;color:#4A3330;font-size:11.4px;margin-top:2px}
+.drill .a::before{content:"→ ";font-family:var(--mono);color:var(--adv)}
+.correction{border-left:3px solid var(--adv);background:var(--advwash);padding:10px 14px;margin:0 0 6px}
+.correction h3{margin-top:0}
+.printmode{display:none}
+footer{margin-top:40px;border-top:1px solid var(--rule);padding-top:12px;font-family:var(--mono);font-size:10px;color:var(--meta);line-height:1.6}
+
+@media (max-width:640px){
+  .e{grid-template-columns:1fr;gap:2px}
+  .rail{text-align:left;flex-direction:row;flex-wrap:wrap;gap:0 10px;align-items:baseline}
+  .masthead h1{font-size:28px}
+  .grid{grid-template-columns:1fr}
+  .jump{display:none}
+}
+
+@page{size:letter portrait;margin:11mm 10mm 12mm}
+@media print{
+  html,body{background:#fff;font-size:8.1pt;line-height:1.33}
+  .wrap{max-width:none;padding:0}
+  .switch{display:none}
+  .printmode{display:block;font-family:var(--mono);font-size:8pt;letter-spacing:.06em;text-transform:uppercase;color:var(--adv);margin-bottom:6px}
+  html.mode-generic .pm-generic,html.mode-stm32 .pm-stm32,html.mode-zynq .pm-zynq{display:block}
+  html.mode-generic .pm-stm32,html.mode-generic .pm-zynq,html.mode-stm32 .pm-generic,html.mode-stm32 .pm-zynq,html.mode-zynq .pm-generic,html.mode-zynq .pm-stm32{display:none}
+  .masthead{padding-top:0;margin-bottom:12px}
+  .masthead h1{font-size:24pt}
+  .subtitle{font-size:9.5pt;margin-bottom:8px}
+  .sheet{break-before:page;margin-top:0}
+  .sheet:first-of-type{break-before:auto}
+  .sheet-head h2{font-size:15pt}
+  .grid{grid-template-columns:1fr 1fr;gap:0 14px}
+  .block{padding:7px 0 8px}
+  .block h3{font-size:10.5pt}
+  .e{grid-template-columns:66px 1fr;gap:0 8px;padding:3px 0}
+  .e .body{font-size:8.1pt}
+  .atk,.mit,.note{font-size:7.8pt}
+  .rail{font-size:6.6pt}
+  table{font-size:7.6pt}
+  .drill,.correction,.legend,.panel{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  a{color:inherit;text-decoration:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="switch" aria-label="Platform mode and sheet index">
+  <div class="switch-row">
+    <span class="switch-label">Platform overlay</span>
+    <button class="modebtn" data-mode="generic" aria-pressed="false">Generic only</button>
+    <button class="modebtn" data-mode="stm32" aria-pressed="true">+ STM32F767ZI (MCU)</button>
+    <button class="modebtn" data-mode="zynq" aria-pressed="false">+ Zynq UltraScale+ / KV260 (MPSoC)</button>
+    <span class="jump">
+      <a href="#s1">1 Memory</a><a href="#s2">2 Concurrency</a><a href="#s3">3 Boot &amp; crypto</a><a href="#fixes">Fixes</a>
+    </span>
+  </div>
+</nav>
+
+<header class="masthead">
+  <h1>Embedded security bench reference<br><em>every mechanism carries its adversary</em></h1>
+  <p class="subtitle">Generic principles hold across any embedded target. Platform overlays add the register-level truth for the two parts on your roadmap. Prints as generic core plus whichever overlay is selected.</p>
+  <div class="printmode pm-generic">Printed mode — generic core only, no platform overlay</div>
+  <div class="printmode pm-stm32">Printed mode — generic core + STM32F767ZI (Cortex-M7 MCU) overlay</div>
+  <div class="printmode pm-zynq">Printed mode — generic core + Zynq UltraScale+ MPSoC / Kria KV260 overlay</div>
+  <dl class="control">
+    <div><dt>Class A target</dt><dd>MCU · Cortex-M7 · MPU · bare metal + RTOS</dd></div>
+    <div><dt>Class B target</dt><dd>MPSoC · A53 APU + R5F RPU + PL</dd></div>
+    <div><dt>Isolation model</dt><dd>Core-local (MPU) vs interconnect (XMPU/XPPU)</dd></div>
+    <div><dt>Root of trust</dt><dd>Software (STM32) vs hardware ROM (ZU+)</dd></div>
+    <div><dt>Open decision</dt><dd class="flag">R5F bare-metal vs A53 Linux vs split</dd></div>
+    <div><dt>Revision</dt><dd>Rev B · 2026-07-29</dd></div>
+  </dl>
+</header>
+
+<div class="legend">
+  <span><b style="color:var(--adv)">ATTACK</b> — how an adversary turns the mechanism against you</span>
+  <span><b style="color:var(--norm)">DO</b> — the mitigation expected of you</span>
+  <span><b style="color:var(--meta)">NOTE</b> — the caveat the textbook answer omits</span>
+</div>
+
+<section class="correction" id="fixes">
+  <h3><span class="n">0.00</span> Corrections carried forward</h3>
+  <div class="e">
+    <div class="rail"><span class="cwe">CWE-347</span></div>
+    <div class="body"><span class="t">CRC is not verification.</span> An unkeyed linear code detects noise, not an adversary — anyone editing the image recomputes it. Signature over a hash is the authenticity decision; CRC is at most a fast-fail pre-check. This holds on every platform, which is why it is in the generic core and not an overlay.</div>
+  </div>
+  <div class="e p-stm32 plat">
+    <div class="rail"><span class="std">ST</span></div>
+    <div class="body"><span class="t">The F767ZI has no AES engine.</span> ST puts the crypto/hash processor on the F777 line. You have the TRNG and nothing else, so the AEAD is software regardless — which settles the pending crypto decision toward Ascon-AEAD128 (NIST SP 800-232, Final 2025-08-13). Note the standardized primitive is <code>Ascon-AEAD128</code>, not the CAESAR-era ASCON-128a, and the byte order changed to little-endian: old test vectors will not match.</div>
+  </div>
+  <div class="e p-zynq plat">
+    <div class="rail"><span class="std">AMD</span></div>
+    <div class="body"><span class="t">It is an MPSoC, not an MCU.</span> The KV260 carries a K26 SOM with a custom Zynq UltraScale+ device: quad Cortex-A53 APU, dual Cortex-R5F RPU, PMU, CSU, programmable logic, 4 GB DDR4. Calling it an MCU in an interview signals you have not used one — the distinguishing features are an MMU, external DRAM, multiple privilege levels including a secure world, and hardware isolation enforced at the interconnect rather than in the core.
+      <span class="note">The "with encryption" SKU is the one where the CSU crypto path is usable: AES-GCM-256, RSA, SHA-3/384. That variant is also the one that carries export restrictions — know the ECCN conversation before an interview asks.</span></div>
+  </div>
+  <div class="e">
+    <div class="rail"><span class="std">nRF24L01+</span></div>
+    <div class="body"><span class="t">126 channels, not 125.</span> <code>RF_CH</code> is 7 bits: 0–125 inclusive at 1 MHz spacing. At 2 Mbps the occupied bandwidth is ~2 MHz, so a non-overlapping hop set is roughly half. Fix the modulus before the hop PRF is written.</div>
+  </div>
+</section>
+
+<!-- ============ SHEET 1 ============ -->
+<section class="sheet" id="s1">
+  <div class="sheet-head">
+    <span class="sheet-num">SHEET 1</span>
+    <h2>Language, memory, and isolation</h2>
+    <span class="kicker">generic core + overlay</span>
+  </div>
+  <div class="grid">
+
+    <article class="block">
+      <h3><span class="n">1.01</span> Qualifiers that mean something</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-14</span><span>MSC06-C</span></div>
+        <div class="body"><span class="t">volatile</span> — every access is emitted, in order, never cached in a register. Correct uses: memory-mapped I/O, objects shared with an interrupt handler, <code>setjmp</code> locals. It is not atomicity, not a barrier against normal memory, not thread safety.
+          <span class="atk">The compiler deletes <code>memset(key,0,n)</code> at end of scope as a dead store. The key survives in RAM and in the stack frame the next call reuses.</span>
+          <span class="mit">Zeroize through a volatile-qualified pointer or a barrier the optimizer cannot see through, then confirm in the disassembly rather than the source.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1232</span></div>
+        <div class="body"><span class="t">Ordering is a separate problem.</span> The compiler orders volatile accesses relative to each other; the processor and the interconnect do not order them relative to normal memory. Every architecture gives you barriers for this and every architecture has developers who skip them.
+          <span class="mit">Barrier after configuration writes that change how subsequent accesses are interpreted, before an effect must be globally visible, and after anything that changes memory attributes or the exception vector base.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-321</span><span>MISRA 8.13</span></div>
+        <div class="body"><span class="t">const</span> is a compile-time promise, not memory protection. Without a hardware region marking the range read-only, a wild pointer writes it.
+          <span class="atk">A key declared <code>static const uint8_t root_key[16]</code> is plaintext in the image. One flash dump, or <code>strings</code> on the shipped binary, and every unit that ever shipped is compromised at once.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-663</span></div>
+        <div class="body"><span class="t">static</span> — internal linkage shrinks the symbol surface; block-scope <code>static</code> creates hidden shared state. A static scratch buffer in a parser is a data race waiting for a second caller, and a race in a parser is usually a write primitive.</div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">1.02</span> Pointers, arrays, and precedence</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-467</span></div>
+        <div class="body"><span class="t">Arrays decay at every call boundary</span>, so <code>sizeof</code> in the callee measures a pointer.
+          <span class="atk">The canonical embedded overflow: a length that came from the wire, or a <code>sizeof</code> that measured four bytes instead of the buffer.</span>
+          <span class="mit">Length travels beside every pointer. In C++, <code>std::span</code> carries the extent for you.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span>MISRA 12.1</span></div>
+        <div class="body"><span class="t">*p++ vs (*p)++ vs *++p</span> — postfix binds tighter than unary dereference.
+          <div class="map" style="margin-top:4px">
+            <div><span class="a">*p++</span><span>value at old p; p advances afterward</span></div>
+            <div><span class="a">(*p)++</span><span>value at *p; the pointee increments, p unchanged</span></div>
+            <div><span class="a">*++p</span><span>p advances first; value at the new target</span></div>
+          </div>
+          <span class="note">The expression's <i>value</i> is the answer, not where the pointer ends up. Reading these as "where does p point now" is what produced the last stack overflow under ASan.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-823</span><span>ARR30-C</span></div>
+        <div class="body"><span class="t">Pointer arithmetic</span> is defined only inside the object and one past its end. Forming an out-of-range pointer is undefined before you dereference, which is why <code>if (p + n &gt; end)</code> can be optimized away entirely.
+          <span class="mit">Bound with the offset: <code>if (n &gt; (size_t)(end - p))</code>.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1189</span></div>
+        <div class="body"><span class="t">Function pointers and vtables</span> are the same primitive with different bookkeeping. A dispatch table in writable memory is a control-flow hijack target one out-of-bounds write away.
+          <span class="mit">Keep tables <code>const</code> so they land in read-only storage, cover that storage with a hardware read-only region, and index only with a validated enum.</span></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">1.03</span> Layout, padding, and what leaks</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-226</span><span class="cwe">CWE-200</span></div>
+        <div class="body"><span class="t">Struct padding is uninitialized</span> and the compiler never has to fill it.
+          <span class="atk">Serializing a struct with <code>memcpy</code> puts those bytes on the wire — whatever the stack last held, including key schedule fragments and pointers that defeat address-space randomization on the Linux side.</span>
+          <span class="mit">Never cast a struct onto the wire, never <code>memcmp</code> two structs. Serialize field by field with explicit byte order.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span>MISRA 11.3</span></div>
+        <div class="body"><span class="t">Packed structs</span> remove padding and create unaligned members. Some access classes fault on unaligned addresses, and device-memory mappings almost always do.
+          <span class="atk">Casting a receive buffer to a packet struct is an alignment bug and a type-punning bug at once, and it hands the parser a length nobody validated.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-190</span><span class="cwe">CWE-195</span></div>
+        <div class="body"><span class="t">Integer promotion and conversion</span> — a signed length compared against an unsigned size converts the wrong way, and a negative length becomes an enormous positive one at the <code>memcpy</code> boundary.
+          <span class="mit">Length types are fixed-width unsigned end to end. <code>-Wconversion -Wsign-conversion</code> plus MISRA essential-type rules catch what review misses.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">Protocol</span></div>
+        <div class="body"><span class="t">Endianness</span> — both of your targets are little-endian; every wire format worth having is big-endian by declaration. Build counters into nonces with shift and mask, never a cast. An endianness bug in nonce construction is silent until two nodes disagree and collide.</div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">1.04</span> Where secrets live — the generic rule</h3>
+      <p class="lead">Rank candidate storage by three properties, in this order: can a non-core bus master reach it, is it cached, and does it survive reset. The best key arena answers no, no, no.</p>
+      <table>
+        <caption>Storage classes and what they cost you</caption>
+        <tr><th>Property</th><th>Why it matters</th><th>Failure if ignored</th></tr>
+        <tr><td>DMA-reachable</td><td>DMA engines bypass core-local protection</td><td class="bad">Confused-deputy read of the key</td></tr>
+        <tr><td>Cached</td><td>Access patterns become timing-observable</td><td class="bad">Cache side channel on the key schedule</td></tr>
+        <tr><td>Off-chip</td><td>DRAM can be probed, cooled, interposed</td><td class="bad">Cold-boot and bus-interposer recovery</td></tr>
+        <tr><td>Reset-persistent</td><td>Survives the event that was meant to clear it</td><td class="bad">Warm-reboot key recovery</td></tr>
+      </table>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-226</span></div>
+        <div class="body"><span class="mit">Whatever the platform, zeroize the key arena in the earliest code that runs after reset — before static initialization, not in <code>main</code> and not in a constructor. Warm reset preserves RAM, and an attacker who can force a reset mid-session is counting on you clearing it late.</span></div>
+      </div>
+
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="map">
+          <div><span class="a">0x0000_0000</span><span>ITCM RAM 16 KB — core-only, uncached</span></div>
+          <div><span class="a">0x0800_0000</span><span>Flash 2 MB, dual-bank capable</span></div>
+          <div><span class="a">0x2000_0000</span><span>DTCM 128 KB — <b>DMA cannot reach</b>, uncached</span></div>
+          <div><span class="a">0x2002_0000</span><span>SRAM1 368 KB — DMA-reachable, cached</span></div>
+          <div><span class="a">0x2007_C000</span><span>SRAM2 16 KB — DMA-reachable</span></div>
+          <div><span class="a">0x4002_4000</span><span>Backup SRAM 4 KB — survives reset on VBAT</span></div>
+        </div>
+        <div class="e" style="margin-top:5px">
+          <div class="rail"><span class="std">RM0410</span></div>
+          <div class="body"><span class="mit">Key arena in DTCM: not DMA-reachable, not cached, on-die. Three of the four properties for free. Cost is that DTCM is also where you want the stack for determinism — budget it. Confirm the bus matrix before you rely on it in a review.</span>
+            <span class="note">Backup SRAM is the wrong home for a session key and the right home for a rollback counter — persistence is the whole point of both decisions, pointed in opposite directions.</span></div>
+        </div>
+      </div>
+
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+ / K26</span>
+        <div class="map">
+          <div><span class="a">OCM 256 KB</span><span>On-chip RAM, XMPU-protectable, on-die — best key arena</span></div>
+          <div><span class="a">R5F TCM</span><span>128 KB per core, core-local, deterministic, uncached</span></div>
+          <div><span class="a">CSU RAM</span><span>Private to the security unit; not yours at runtime</span></div>
+          <div><span class="a">PMU RAM 128 KB</span><span>~125.7 KB usable by PMU firmware after the boot ROM's reservation</span></div>
+          <div><span class="x">DDR4 4 GB</span><span>Off-chip — cold-boot and interposer exposed unless encrypted</span></div>
+          <div><span class="a">eFUSE / BBRAM</span><span>Key storage; eFUSE is one-way, BBRAM needs a battery</span></div>
+        </div>
+        <div class="e" style="margin-top:5px">
+          <div class="rail"><span class="cwe">CWE-1301</span></div>
+          <div class="body"><span class="t">External DRAM changes the threat model.</span> On the MCU everything was on-die; here the bulk of memory sits on a bus an attacker can probe, and the module can be chilled to retain contents across a reset.
+            <span class="mit">Keys and key schedules live in OCM or R5F TCM, covered by an XMPU region that names only the master allowed to touch them. If secrets must transit DDR, they transit encrypted.</span></div>
+        </div>
+        <div class="e">
+          <div class="rail"><span class="std">PUF</span></div>
+          <div class="body"><span class="t">There is a fourth option here that the MCU does not have</span> — a physically unclonable function deriving a device-unique key encryption key, so the key is not stored anywhere at rest. Black (encrypted) keys in the boot image, red keys only inside the CSU.</div>
+        </div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">1.05</span> Image layout and the pre-main window</h3>
+      <div class="e">
+        <div class="rail"><span class="std">Generic</span></div>
+        <div class="body"><span class="t">Sections</span> — code and constants in non-volatile storage, initialized data copied to RAM, zero-initialized data cleared, and some region deliberately left untouched. Every toolchain names these differently; the security questions are identical: what is writable, what is executable, and who decided.
+          <span class="mit">Read the map file every build. A section that moved is a memory-safety change nobody reviewed.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1189</span></div>
+        <div class="body"><span class="t">W^X</span> — no region is both writable and executable. This is free on both targets and is the single highest-value memory-protection decision you will make.</div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="e">
+          <div class="rail"><span class="cwe">CWE-121</span></div>
+          <div class="body"><span class="t">Reset_Handler</span> loads SP from vector[0], copies <code>.data</code>, zeroes <code>.bss</code>, runs <code>SystemInit</code> and static constructors, then <code>main</code>. Zeroize keys at the very top of it.
+            <span class="mit"><code>PROVIDE</code> region boundaries in the linker script and consume those symbols in MPU setup so protection cannot drift from layout. Reserve an explicit stack-guard region and give it a no-access region — deterministic, unlike watermark checking which only notices afterward.</span></div>
+        </div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+ / K26</span>
+        <div class="e">
+          <div class="rail"><span class="std">bootgen</span></div>
+          <div class="body"><span class="t">There is no single image.</span> A boot image is a container described by a BIF file and assembled by <code>bootgen</code>: FSBL, PMU firmware, ARM Trusted Firmware, U-Boot, the PL bitstream, R5 firmware, Linux. Each partition has its own destination processor, its own signing key, and its own load address.
+            <span class="mit">Treat the BIF as a security artifact under review. It is where authentication is enabled or quietly left off per partition, and a single unauthenticated partition breaks the chain no matter how good the others are.</span></div>
+        </div>
+        <div class="e">
+          <div class="rail"><span class="cwe">CWE-1188</span></div>
+          <div class="body"><span class="t">DDR is initialized by software</span>, which means there is a window where the memory controller and its scrubbing are not yet configured. Anything staged before that window lives in OCM.</div>
+        </div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">1.06</span> Isolation — core-local versus interconnect</h3>
+      <p class="lead">This is the single biggest architectural difference between your two targets, and the question most likely to separate you from other candidates.</p>
+      <table>
+        <caption>Who is actually checked</caption>
+        <tr><th>Enforcement point</th><th>Constrains</th><th>Misses</th></tr>
+        <tr><td>Core MPU / MMU</td><td>Instruction fetch and data access by that core</td><td class="bad">Every other bus master, including DMA</td></tr>
+        <tr><td>Interconnect firewall</td><td>Transactions by master ID, at the slave</td><td class="good">Nothing on that path — DMA included</td></tr>
+        <tr><td>System MMU</td><td>Translates and checks device transactions</td><td>Devices behind a non-translated port</td></tr>
+      </table>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1189</span></div>
+        <div class="body"><span class="atk">Any driver that programs a DMA address derived from untrusted input has an arbitrary write with full bus privilege — on a core-MPU-only design there is nothing between it and the rest of memory.</span>
+          <span class="mit">Validate every DMA address and length against a compile-time-known buffer before arming. Treat the DMA engine as an untrusted peer, not as part of your task.</span></div>
+      </div>
+
+      <article class="panel plat p-stm32" style="padding:8px 11px">
+        <span class="chip">STM32F767ZI · Cortex-M7 PMSAv7 · 8 regions</span>
+        <table>
+          <caption>Baseline region plan</caption>
+          <tr><th>#</th><th>Range</th><th>Perm</th><th>Why</th></tr>
+          <tr><td class="m">0</td><td>Flash code</td><td class="m">RO, exec</td><td>Code never writable</td></tr>
+          <tr><td class="m">1</td><td>Flash constants</td><td class="m">RO, XN</td><td>Constants are not code</td></tr>
+          <tr><td class="m">2</td><td>SRAM data</td><td class="m">RW, XN</td><td>Kills injected-code execution</td></tr>
+          <tr><td class="m">3</td><td>Peripherals</td><td class="m">RW, XN, priv</td><td>Device memory, privileged only</td></tr>
+          <tr><td class="m">4</td><td>Stack guard</td><td class="m bad">no access</td><td>Overflow faults, not corrupts</td></tr>
+          <tr><td class="m">5</td><td>Key arena (DTCM)</td><td class="m">RW, XN, priv</td><td>Unprivileged tasks cannot read it</td></tr>
+          <tr><td class="m">6–7</td><td>Per-task window</td><td class="m">task-scoped</td><td>Reconfigured on context switch</td></tr>
+        </table>
+        <div class="e">
+          <div class="rail"><span class="std">ARM ARM</span></div>
+          <div class="body"><span class="note">Power-of-two sizes, base aligned to size, subregion disable in eighths at 256 B and above, highest-numbered region wins on overlap. Barrier after enabling or the next instructions still run under the old permissions.</span>
+            <span class="atk">The MPU checks the core. DMA is unchecked. On this part that gap has no hardware fix — only driver discipline.</span></div>
+        </div>
+      </article>
+
+      <article class="panel plat p-zynq" style="padding:8px 11px">
+        <span class="chip">Zynq UltraScale+ · XMPU / XPPU / SMMU / TrustZone</span>
+        <table>
+          <caption>Four layers, four jobs</caption>
+          <tr><th>Mechanism</th><th>Protects</th><th>Granularity</th></tr>
+          <tr><td class="m">XMPU</td><td>DDR, OCM, FPD slaves</td><td>Address range × master ID</td></tr>
+          <tr><td class="m">XPPU</td><td>LPD peripherals, registers</td><td>Peripheral × master ID</td></tr>
+          <tr><td class="m">SMMU</td><td>Device transactions</td><td>Translation + permission</td></tr>
+          <tr><td class="m">TrustZone</td><td>Secure vs non-secure world</td><td>Per-transaction NS bit</td></tr>
+          <tr><td class="m">R5F MPU</td><td>The R5 core itself</td><td>Region, core-local</td></tr>
+        </table>
+        <div class="e">
+          <div class="rail"><span class="std">FSBL/PMUFW</span></div>
+          <div class="body"><span class="t">Who configures what, and when.</span> The FSBL programs XMPU and XPPU after loading partitions and before releasing the processors. After that, the PMU firmware is the only entity with permission to change them — so neither Linux nor an application can weaken isolation at runtime.
+            <span class="mit">That ordering is the answer to "how do you stop a compromised Linux from reaching the real-time subsystem." Configure isolation in Vivado's isolation wizard, generate it into the FSBL, and leave the PMU as the only key holder.</span></div>
+        </div>
+        <div class="e">
+          <div class="rail"><span class="cwe">CWE-1189</span></div>
+          <div class="body"><span class="mit">This is where the MCU's DMA gap closes. XMPU checks by master ID at the slave, so a DMA engine programmed with a bad address is refused by the interconnect rather than by your driver's good intentions. Say exactly this when asked to compare an MPU to an MPSoC's isolation.</span></div>
+        </div>
+      </article>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">1.07</span> Caches, coherency, and shared buffers</h3>
+      <div class="e">
+        <div class="rail"><span class="std">Generic</span></div>
+        <div class="body"><span class="t">The rule never changes.</span> Clean before a non-coherent agent reads your buffer; invalidate after it writes one. Cache maintenance operates on whole lines, so a shared buffer that straddles a line with unrelated data will corrupt or resurrect that data.
+          <span class="mit">Align shared buffers to the cache line and round the length up to a multiple of it. Both targets punish you for skipping this, in ways that look like random corruption.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1421</span></div>
+        <div class="body"><span class="t">Cache as a side channel</span> — data-dependent memory access leaks through timing. Table-driven ciphers are the textbook case, and the mitigation is the same everywhere: uncached working memory, or a primitive with no secret-dependent lookups.</div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="e"><div class="rail"><span class="std">Cortex-M7</span></div>
+          <div class="body">16 KB I-cache + 16 KB D-cache, write-back, 32-byte lines. Clean before DMA transmit, invalidate after DMA receive, align DMA buffers to 32 bytes. Crypto working set in DTCM sidesteps the whole problem — uncached and constant-latency.</div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+</span>
+        <div class="e"><div class="rail"><span class="std">CCI / ACP</span></div>
+          <div class="body">Three classes of port and the choice is a security decision as much as a performance one: coherent ports where the interconnect maintains coherency for you, accelerator-coherent ports into the A53 cluster's caches, and high-performance ports with no coherency at all where software must maintain it.
+            <span class="atk">A PL accelerator on a non-coherent port reading a buffer the A53 has not cleaned sees stale data — and in the other direction, writes plaintext into a line the core later evicts over something else.</span>
+            <span class="mit">Shared ring buffers between A53 and R5F go in uncached memory or get explicit maintenance on both sides. The intermittent-corruption bug you will spend a week on is always this.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">1.08</span> Build baseline</h3>
+      <div class="e">
+        <div class="rail"><span class="std">CI gate</span></div>
+        <div class="body"><span class="t">Warnings as errors, always</span> — <code>-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -Wundef -Wcast-align -Wstrict-prototypes -Werror</code>, plus static analysis in CI from the first commit.
+          <span class="mit">Pin the toolchain by version and hash. A program will ask you to rebuild from a tag and get identical bytes.</span></div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="e"><div class="rail"><span class="cwe">CWE-121</span></div>
+          <div class="body"><code>-fstack-protector-strong</code> requires you to supply <code>__stack_chk_guard</code> and <code>__stack_chk_fail</code> on bare metal.
+            <span class="atk">The default guard is a fixed value in flash. An attacker who reads the image reads the canary and steps over it — an unrandomized canary is theater.</span>
+            <span class="mit">Seed the guard from the TRNG before any function with an array local runs; the fail handler resets the part rather than returning. Add <code>-Wstack-usage=N</code> and size stacks from measurement.</span></div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+</span>
+        <div class="e"><div class="rail"><span class="std">Yocto</span></div>
+          <div class="body">Two toolchains and two hardening stories. Bare-metal or FreeRTOS on the R5F looks like the MCU column. Linux on the A53 gets the userspace set: <code>-D_FORTIFY_SOURCE=3</code>, full RELRO, position-independent executables, <code>-fstack-clash-protection</code>, and branch-target enforcement where the toolchain supports it.
+            <span class="mit">A PetaLinux or Yocto build is a supply chain. Generate an SBOM, track CVEs against the kernel and every recipe you pull, and be ready to say how you patch a fielded unit — that is now an explicit federal expectation, not a nicety.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block drill">
+      <h3><span class="n">1.09</span> Interview drill — Sheet 1</h3>
+      <ol>
+        <li>Where does the key live at reset, and why there?
+          <span class="a">Generic answer: memory no other bus master can reach, uncached, on-die, cleared in the first code after reset. <span class="plat p-stm32">On the F767 that is DTCM, covered by a privileged MPU region.</span><span class="plat p-zynq">On the MPSoC that is OCM or R5F TCM behind an XMPU region naming a single master ID — never DDR, which is off-chip and cold-boot exposed.</span></span></li>
+        <li>Your MPU marks SRAM execute-never and the device faults immediately. First suspect?
+          <span class="a">Something legitimately executes from RAM — a RAM-resident flash routine or an RTOS trampoline. Second suspect: a region base not aligned to its size, covering a range you did not intend.</span></li>
+        <li>Explain why an MPU is weaker than an interconnect firewall.
+          <span class="a">The MPU checks transactions issued by its own core. Every other master — DMA, an accelerator in the fabric, another cluster — is unchecked. An interconnect firewall checks at the slave by master ID, so it covers all of them.</span></li>
+        <li>You must send a struct over a link. What do you do and why?
+          <span class="a">Serialize field by field with explicit byte order. A raw copy ships uninitialized padding, which is an information disclosure of whatever the stack last held.</span></li>
+      </ol>
+    </article>
+
+  </div>
+</section>
+
+<section class="sheet" id="s2">
+  <div class="sheet-head">
+    <span class="sheet-num">SHEET 2</span>
+    <h2>Concurrency, interrupts, drivers</h2>
+    <span class="kicker">generic core + overlay</span>
+  </div>
+  <div class="grid">
+
+    <article class="block">
+      <h3><span class="n">2.01</span> Task model — scheduling is a security decision</h3>
+      <div class="e">
+        <div class="rail"><span class="std">Generic</span></div>
+        <div class="body"><span class="t">States</span> — ready, running, blocked on an event with a deadline, suspended on nothing. The distinction that matters: a blocked task has a timeout and something eventually notices; a suspended task has neither.</div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-323</span></div>
+        <div class="body"><span class="t">Priority is a security parameter.</span> Assign it from deadlines, then re-examine it from the attacker's side.
+          <span class="atk">Starve the key-rotation path and the session outlives its key lifetime. Starve it under a flood and the packet counter wraps under an unchanged key — nonce reuse, which in any AEAD means recovered keystream and forgeable tags.</span>
+          <span class="mit">Rotation is high priority and short. Counter exhaustion is a hard stop that halts transmission, not a log line.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-400</span></div>
+        <div class="body"><span class="t">Bounded queues, bounded waits.</span> Never block forever on a path an attacker can drive.
+          <span class="atk">Unbounded receive enqueue is a remote denial of service: flood the input, fill the queue, and legitimate traffic is dropped while the verifier drowns in forgeries.</span>
+          <span class="mit">Cheapest rejection first — length and replay window before you spend a tag verification.</span></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">2.02</span> Synchronization and the inversion family</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-667</span></div>
+        <div class="body"><span class="t">Mutex ≠ binary semaphore.</span> A mutex has an owner and can therefore implement priority inheritance. A semaphore has no owner and cannot.
+          <span class="atk">Guard a resource with a binary semaphore and a low-priority holder is preempted indefinitely by mid-priority work while the high-priority security task waits. Unbounded priority inversion — the Mars Pathfinder failure, still shipping in new code.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">RMA</span></div>
+        <div class="body"><span class="t">Inversion → inheritance → ceiling.</span> Inheritance boosts the holder for the duration of the wait. Immediate ceiling raises on acquisition to the highest priority of any task that can take the lock: bounded blocking, no deadlock, easier worst-case analysis, coarser in practice.
+          <span class="mit">Know the ceiling protocol by name and be able to say why you did not need it. That is the follow-up question.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-833</span></div>
+        <div class="body"><span class="t">Deadlock</span> needs mutual exclusion, hold-and-wait, no preemption, and circular wait. Break the cycle with a documented global lock order.
+          <span class="atk">A deadlock reachable from network input is a remotely triggerable hang, and the watchdog reset that follows is the payload.</span></div>
+      </div>
+      <table>
+        <caption>FreeRTOS ↔ VxWorks — keep it warm</caption>
+        <tr><th>Concept</th><th class="m">FreeRTOS</th><th class="m">VxWorks</th></tr>
+        <tr><td>Create task</td><td class="m">xTaskCreate</td><td class="m">taskSpawn</td></tr>
+        <tr><td>Binary / counting</td><td class="m">…CreateBinary / Counting</td><td class="m">semBCreate / semCCreate</td></tr>
+        <tr><td>Mutex with inheritance</td><td class="m">…CreateMutex (default)</td><td class="m">semMCreate(SEM_INVERSION_SAFE)</td></tr>
+        <tr><td>Queue</td><td class="m">xQueueSend / Receive</td><td class="m">msgQSend / msgQReceive</td></tr>
+        <tr><td>From interrupt</td><td class="m">…FromISR + yield</td><td class="m">semGive (restricted)</td></tr>
+        <tr><td>Isolation</td><td class="m">FreeRTOS-MPU restricted task</td><td class="m">RTP</td></tr>
+        <tr><td>Error capture</td><td class="m">roll your own</td><td class="m">ED&amp;R</td></tr>
+      </table>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">2.03</span> Interrupts, DMA, latency</h3>
+      <table>
+        <caption>Transfer strategy, with the column the original sheet omits</caption>
+        <tr><th>Method</th><th>CPU</th><th>Jitter</th><th>Security consideration</th></tr>
+        <tr><td>Polling</td><td>High</td><td>Low</td><td>Bounded and auditable; wastes cycles an attacker can make you spend</td></tr>
+        <tr><td>Interrupt</td><td>Med</td><td>Low</td><td>Rate is attacker-controlled — an interrupt storm is a denial-of-service primitive</td></tr>
+        <tr><td>DMA</td><td>Low</td><td>Med</td><td class="bad">Unchecked by core-local protection; the address is a write primitive</td></tr>
+      </table>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-835</span></div>
+        <div class="body"><span class="t">Handler discipline</span> — short, non-blocking, clear the source, defer the work, and put a timeout on every hardware wait.
+          <span class="atk">A spin on a status flag with a dead or glitched peripheral hangs at high priority forever. The system is bricked until the watchdog fires, repeatedly, on demand.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-385</span></div>
+        <div class="body"><span class="t">Latency is a channel.</span> Response jitter correlated with verification outcome tells an attacker whether a forgery was close.
+          <span class="mit">Constant-time verification and a fixed response schedule. Constant-time compare followed by an immediate reply still leaks through the reply.</span></div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI · NVIC</span>
+        <div class="e"><div class="rail"><span class="cwe">CWE-1256</span></div>
+          <div class="body">Set all priority bits to preempt (no subpriority grouping). Any handler calling an RTOS-from-interrupt API must sit at or below the kernel's syscall priority ceiling — numerically higher means logically lower, and getting it backwards corrupts the ready lists in a way that presents as a random hang under load.
+            <span class="mit">Leave the kernel's assertion macro enabled in every build you test; it catches exactly this. Masking: <code>BASEPRI</code> for critical sections, <code>PRIMASK</code> for all-off, <code>FAULTMASK</code> is not yours.</span></div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+ · GIC + IPI</span>
+        <div class="e"><div class="rail"><span class="std">UG1085</span></div>
+          <div class="body">A generic interrupt controller per cluster, with software-generated, private-peripheral, and shared-peripheral interrupts, plus affinity routing to specific cores. Separate from that: inter-processor interrupt channels with dedicated message buffers, which is how the APU and RPU signal each other.
+            <span class="atk">IPI channels and their message buffers are an interface between trust domains. If Linux can raise any IPI and write any message buffer, a compromised Linux drives the real-time subsystem's control path.</span>
+            <span class="mit">Restrict IPI channel and buffer access by master ID in XPPU. The doorbell is part of the attack surface, not plumbing.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block wide plat p-zynq panel">
+      <span class="chip">Zynq UltraScale+ · open decision</span>
+      <h3><span class="n">2.04</span> R5F bare-metal vs A53 Linux vs the split — the tradeoff</h3>
+      <p class="lead">You have not committed, and you should not until you know which of the two jobs this board is doing. The honest framing is that these are not three options; they are two roles and a decision about whether you need both.</p>
+      <table>
+        <caption>Same board, three postures</caption>
+        <tr><th>Axis</th><th>R5F bare-metal / FreeRTOS</th><th>A53 + Linux</th><th>Split via OpenAMP</th></tr>
+        <tr><td>Timing</td><td class="good">Hard real-time, TCM, no MMU surprises</td><td>Soft; PREEMPT_RT and core isolation help, never guarantee</td><td class="good">Hard on R5, soft on A53</td></tr>
+        <tr><td>Attack surface</td><td class="good">Small and fully auditable</td><td class="bad">Kernel, drivers, network stack, every package</td><td>Both, plus the channel between them</td></tr>
+        <tr><td>V&amp;V</td><td class="good">Tractable; DO-178C-style evidence feasible</td><td class="bad">Not credibly certifiable; permanent CVE treadmill</td><td class="good">Certify the R5 side only</td></tr>
+        <tr><td>Crypto</td><td>You implement and own it</td><td>Kernel crypto API, OpenSSL, TPM 2.0</td><td>Keys stay on R5, rich services on A53</td></tr>
+        <tr><td>Job-description fit</td><td>Real-time missile software</td><td>Embedded Linux line item</td><td class="good">Inter-processor communication line item</td></tr>
+      </table>
+      <div class="e">
+        <div class="rail"><span class="std">Recommendation</span></div>
+        <div class="body"><span class="t">The split is the defensible default</span> — security-critical state and hard deadlines on the R5F, everything rich and untrusted on the A53, the boundary enforced by XMPU and XPPU rather than by convention, and the two talking over a narrow, validated message interface.
+          <span class="mit">Decide it when you know whether the board needs a network stack and a filesystem. If it does not, the R5-only posture is smaller, faster to verify, and honest. Do not adopt Linux because it is comfortable.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1189</span></div>
+        <div class="body"><span class="t">If you take the split, the IPC boundary is the product.</span> Shared ring buffers in reserved uncached memory, a doorbell interrupt, and a message format that the R5 side treats as fully hostile — length-checked, bounds-checked, no pointers, no structs cast onto the buffer.
+          <span class="atk">The tempting mistake is to trust Linux because you wrote both sides. The whole point of the split is that one side is expected to fall.</span></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">2.05</span> Watchdogs and failing secure</h3>
+      <div class="e">
+        <div class="rail"><span class="std">Generic</span></div>
+        <div class="body"><span class="t">A hardware watchdog is only useful if petting it proves liveness.</span> A single spinning task that keeps kicking the timer keeps a dead system looking alive.
+          <span class="mit">One software supervisor requires every registered task to check in within its own deadline, and only then pets the hardware. Windowed watchdogs, where kicking too early also faults, catch the runaway loop that happens to contain the kick.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-636</span></div>
+        <div class="body"><span class="t">Fail-safe versus fail-secure</span> — safe means keep operating degraded; secure means stop rather than operate unauthenticated. On a defense program you will be asked which this subsystem is, and the answer is a requirement, not a preference.
+          <span class="mit">Write it into the threat model: repeated authentication failure stops the link. It does not fall back to plaintext.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">V&amp;V</span></div>
+        <div class="body"><span class="t">Prove it trips.</span> A watchdog that has never fired in test is an untested path in your most safety-relevant function. Block a task deliberately, confirm the reset, confirm the reset cause is readable afterward, confirm the post-reset path zeroizes keys first.</div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="e"><div class="rail"><span class="std">RM0410</span></div>
+          <div class="body">Independent watchdog runs from the low-speed internal oscillator, survives a main-clock or PLL failure, and cannot be stopped once started. Windowed watchdog adds the too-early check. Reset cause is readable from the clock-control status register — read it and act on it.</div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+</span>
+        <div class="e"><div class="rail"><span class="std">PMU</span></div>
+          <div class="body">System watchdog timers in both the low-power and full-power domains, plus a platform management unit that owns error management and can take a configured response — reset a subsystem rather than the whole device.
+            <span class="mit">Two things the MCU cannot do: run the R5 pair in lockstep so a divergence is detected in hardware, and reset the Linux domain without disturbing the real-time domain. Both are strong answers to "how does your system degrade."</span>
+            <span class="note">Linux adds its own layer — a userspace supervisor feeding the hardware watchdog. Same trap as the MCU: make it prove liveness of the things that matter, not of itself.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">2.06</span> Entropy and random number generation</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-330</span><span class="std">SP 800-90B</span></div>
+        <div class="body"><span class="t">Raw entropy is not a random number.</span> A hardware source feeds a deterministic generator; the source needs continuous health tests — repetition count and adaptive proportion — with a hard failure path, not a warning.
+          <span class="atk">Cold boot before entropy accumulates, or a glitched source returning a stuck value, and the session nonce or ephemeral key is predictable. A tick-seeded or library <code>rand()</code> is the same failure with no excuse.</span>
+          <span class="mit">Check the source's error flags on every draw, discard the first samples after enable, and never hand raw source output to a key derivation.</span></div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="e"><div class="rail"><span class="std">TRNG</span></div>
+          <div class="body">One true random number generator, and it is the whole entropy story on this part. Honor the seed-error and clock-error flags, discard the first sample, feed a software deterministic generator rather than using output directly as key material.</div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+ / K26</span>
+        <div class="e"><div class="rail"><span class="std">CSU / TPM</span></div>
+          <div class="body">Three independent sources here, which is a genuine advantage: the security unit's own generator, the A53 cryptography extensions for the primitives themselves, and the on-module TPM 2.0.
+            <span class="mit">On Linux, do not fight the kernel's entropy pool — feed it. The interesting design question is early boot, before any pool is seeded, which is exactly when the boot chain wants keys. Answer with a hardware source and a physically unclonable function, not with stored entropy.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">2.07</span> Driver contracts and untrusted hardware</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1284</span><span class="cwe">CWE-787</span></div>
+        <div class="body"><span class="t">Hardware-reported lengths are input, not truth.</span> Worked example from your radio: the nRF24L01+ product specification states that if the dynamic payload width reads above 32, the data is corrupt and the receive FIFO must be flushed.
+          <span class="atk">Trust it and copy that width into a 32-byte buffer, and the peripheral itself hands you a stack overflow — no attacker sophistication needed, just interference.</span>
+          <span class="mit">Bound it, flush on violation, count the event. This is your best answer when an interviewer asks for a time you validated data from hardware, and the principle generalizes to every descriptor, every length field, and every status register on either platform.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span>MISRA 17.7</span></div>
+        <div class="body"><span class="t">Layering exists to name the trust boundary.</span> Everything below the parser is untrusted input; everything above is validated. Functions on that boundary get explicit pre- and postcondition comments, validate inputs, and return a status the caller checks.</div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-134</span><span>MISRA 21.6</span></div>
+        <div class="body"><span class="t">Instrumentation</span> — formatted printing over a serial port perturbs timing enough to hide the bug, drags in a heap and a format parser, and is a format-string surface. Use a low-overhead trace channel and a logic analyzer for ground truth.
+          <span class="mit">Never log key material or plaintext. A debug build that leaks the session key is a key disclosure with extra steps.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">Radio</span></div>
+        <div class="body"><span class="t">The radio's integrity features are not security.</span> An unkeyed CRC, an address filter, and automatic retransmit are all reproducible by anyone with a second module. The address is transmitted in the clear and is a filter, not authentication.
+          <span class="mit">Everything above the link treats a received frame as fully attacker-controlled. The authenticated-encryption tag is the only thing that grants trust.</span></div>
+      </div>
+    </article>
+
+    <article class="block drill">
+      <h3><span class="n">2.08</span> Interview drill — Sheet 2</h3>
+      <ol>
+        <li>Which of your synchronization objects are exposed to unbounded priority inversion?
+          <span class="a">Every binary or counting semaphore used for mutual exclusion. Mutexes have an owner so inheritance can apply; semaphores have nobody to boost.</span></li>
+        <li>Your counter is four bytes. What is the failure at wrap, and what happens if a brownout loses it?
+          <span class="a">Wrap under an unchanged key is nonce reuse: keystream recovery and forgeable tags. Brownout is the harder version — persist ahead of use with margin, or force a rekey on every reset, which is simpler and defensible.</span></li>
+        <li>Why is a DMA-capable driver a bigger problem than a polled one?
+          <span class="a">The DMA engine acts with full bus privilege on an address your driver supplied. <span class="plat p-stm32">On a core-MPU part nothing checks it but your code.</span><span class="plat p-zynq">On this MPSoC the XMPU checks it at the slave by master ID, which is the concrete reason interconnect isolation beats a core MPU.</span></span></li>
+        <li class="plat p-zynq">Justify your R5F versus A53 partitioning to a program lead.
+          <span class="a">Security-critical state and hard deadlines on the R5F where the surface is small and the evidence is tractable; rich services on the A53; the boundary enforced by XMPU and XPPU, not convention; a narrow validated message interface between them, with the R5 side treating Linux as already compromised.</span></li>
+        <li>The peripheral reports a payload larger than the buffer. What does your driver do?
+          <span class="a">Reject, flush, count, and carry on. Trusting a hardware-supplied length is a buffer overflow you were handed for free.</span></li>
+      </ol>
+    </article>
+
+  </div>
+</section>
+
+<section class="sheet" id="s3">
+  <div class="sheet-head">
+    <span class="sheet-num">SHEET 3</span>
+    <h2>Boot, privilege, crypto, verification</h2>
+    <span class="kicker">generic core + overlay</span>
+  </div>
+  <div class="grid">
+
+    <article class="block wide">
+      <h3><span class="n">3.01</span> Chain of trust — the generic model</h3>
+      <p class="lead">Each stage verifies the next before transferring control. The chain is worth exactly as much as its first link, and the first link must be something the attacker cannot rewrite.</p>
+      <div class="map">
+        <div><span class="a">Root</span><span>Immutable code, plus a public key or its hash in one-way storage</span></div>
+        <div><span class="a">Verify</span><span>Hash the next stage, check a signature over that hash — not a checksum</span></div>
+        <div><span class="a">Rollback</span><span>Compare version against a monotonic counter the application cannot write</span></div>
+        <div><span class="a">Sanitize</span><span>Zeroize scratch and keys, quiesce peripherals, lock security resources</span></div>
+        <div><span class="a">Hand off</span><span>Transfer control with the minimum state the next stage needs</span></div>
+        <div><span class="x">Never</span><span>CRC as authenticity · mutable public key · debug left open · a counter the app can reset</span></div>
+      </div>
+      <div class="e" style="margin-top:6px">
+        <div class="rail"><span class="cwe">CWE-1326</span><span class="std">SP 800-193</span></div>
+        <div class="body"><span class="t">Secure boot and measured boot answer different questions.</span> Secure boot refuses to run code that fails verification. Measured boot runs it but records what ran into a tamper-evident log, so a remote party can decide whether to trust the result. They compose: verify locally, attest remotely.
+          <span class="mit">Know the triad from the platform-resiliency guidance — protect, detect, recover. A design that only protects has no answer for the day protection fails.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-494</span></div>
+        <div class="body"><span class="t">Anti-rollback is separate from signature verification.</span>
+          <span class="atk">An attacker replays a genuinely signed <i>old</i> image carrying a patched vulnerability. Every signature checks out. This is why authenticity alone is not enough.</span>
+          <span class="mit">One-way version storage, checked before handoff, unreachable from the application. A counter in ordinary writable storage is a counter the attacker resets.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-367</span><span class="cwe">CWE-1247</span></div>
+        <div class="body"><span class="t">Verify-then-execute is a race.</span> Anything that can modify the image between the check and the jump defeats it, and a voltage or clock glitch at the verify branch skips the check outright.
+          <span class="mit">Write-protect what you verified, keep the window minimal, and make the decision hard to glitch — redundant checks with differing encodings rather than one branch on a boolean.</span></div>
+      </div>
+    </article>
+
+    <article class="block panel plat p-stm32">
+      <span class="chip">STM32F767ZI · boot</span>
+      <h3><span class="n">3.02</span> Chain of trust on an MCU with no boot ROM verification</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1326</span></div>
+        <div class="body"><span class="t">Real answer versus textbook answer.</span> The textbook says the root of trust is immutable hardware. This part has no ROM that verifies your code, so the honest answer is a first-stage bootloader in the lowest flash sectors made <i>practically</i> immutable by write protection plus readout protection — weaker than a hardware root, and you should say so.
+          <span class="mit">Naming the limit of your own design is what separates candidates. Point at ST's secure boot and firmware update reference implementation as the design you compared against.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">Option bytes</span></div>
+        <div class="body"><span class="t">The controls you actually have</span> — boot address option bytes select the entry point; write protection locks the bootloader sectors; proprietary code readout protection can make a region execute-only; the one-time-programmable area holds a public key hash and rollback bits; the dual-bank option enables read-while-write for A/B update.
+          <span class="mit">Burn one one-time bit per accepted version. Stage into the inactive bank, verify, swap, and let the new image set a confirmation flag only after it passes self-test — an unconfirmed boot reverts.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1329</span></div>
+        <div class="body"><span class="t">The vendor system bootloader is a door you did not install.</span> With the boot pin asserted the part enters a ROM loader that speaks serial protocols and will read and write flash for whoever holds the pin.
+          <span class="mit">Tie the pin low in hardware and set boot address option bytes deliberately. The highest readout-protection level also closes this path, which is one of its main jobs.</span></div>
+      </div>
+    </article>
+
+    <article class="block panel plat p-zynq">
+      <span class="chip">Zynq UltraScale+ / K26 · boot</span>
+      <h3><span class="n">3.03</span> Chain of trust with a real hardware root</h3>
+      <div class="e">
+        <div class="rail"><span class="std">UG1085</span></div>
+        <div class="body"><span class="t">The sequence.</span> On release from reset the platform management unit runs its boot ROM and brings up the configuration and security unit. The CSU boot ROM — running on a triple-redundant secure processor with its own ROM and private RAM — reads the boot mode, authenticates and optionally decrypts the first-stage bootloader, establishes the root of trust, locks the boot security resources, and hands the chain to the FSBL on either the APU or the RPU. The FSBL then loads platform management firmware, ARM Trusted Firmware, the bitstream, U-Boot, R5 firmware, and Linux, verifying each partition as it goes.
+          <span class="note">Boot security here is largely orthogonal to TrustZone. They are separate mechanisms that people conflate constantly — a good thing to get right out loud.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">CSU</span></div>
+        <div class="body"><span class="t">The crypto you get.</span> AES-GCM-256, RSA, SHA-3/384, and a random number generator, all in the security unit's crypto interface block, and all still available at runtime after boot. The unit also performs tamper response monitoring once the system is up.
+          <span class="mit">This is the "with encryption" SKU's entire value. Without it the chain of trust is a paper design.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">eFUSE</span></div>
+        <div class="body"><span class="t">The fuses that matter.</span> <code>RSA_EN</code> forces every boot to be authenticated. <code>JTAG_DIS</code> disables the debug interface. Alongside them sit the primary public key hash, secondary key identifiers used for revocation, and the device AES key.
+          <span class="mit">Two-tier key structure: the primary key is fused and permanent; secondary keys sign partitions and are revocable by identifier. That is how you rotate a signing key without bricking fielded units, and it is a question a hiring panel will ask.</span>
+          <span class="atk">Fuses are one-way. Blowing <code>JTAG_DIS</code> or the highest security fuses on your only board ends your ability to debug it, permanently. Practise the sequence in emulation and on a sacrificial unit first.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1300</span></div>
+        <div class="body"><span class="t">Key storage, three ways.</span> Fused key: permanent, no battery, no rotation. Battery-backed RAM: rotatable and erasable on tamper, but needs a battery. Physically-unclonable-function-wrapped: the key is derived from device physics and stored only in encrypted form, so nothing at rest is the key.
+          <span class="mit">Key rolling — encrypting different partitions under different derived keys — exists specifically to limit differential power analysis exposure. Naming that as a countermeasure rather than a performance feature shows you know what side channels are.</span>
+          <span class="note">The security unit locks the protected AES key out as a runtime source when the first-stage bootloader is not itself encrypted. Confidentiality of protected partitions survives even if authentication is later distrusted.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">TPM 2.0</span></div>
+        <div class="body"><span class="t">Measured boot on the module.</span> The K26 carries an Infineon TPM 2.0 alongside the MPSoC root of trust, giving you measurement, remote attestation, and sealed storage.
+          <span class="mit">Secure boot is local refusal; the TPM is how a remote party gets evidence. On a fielded defense system the second one is often the requirement that actually appears in the specification.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">CNSA 2.0</span></div>
+        <div class="body"><span class="t">The forward-looking gap, and it is interview gold.</span> The immutable boot ROM authenticates with RSA-4096. NSA's Commercial National Security Algorithm Suite 2.0 requires quantum-resistant signatures for firmware and software signing, and RSA is not one. The ROM cannot be changed.
+          <span class="mit">The mitigation pattern is layered: keep vendor secure boot enabled, encrypt the first stage with the device key, keep that stage minimal, and have it verify all operational firmware with a post-quantum signature scheme before execution. Third-party boot loaders exist that do exactly this.</span>
+          <span class="note">Raising this unprompted in a defense interview is a strong signal — it shows you track the standards timeline, not just the datasheet.</span></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">3.04</span> Privilege model and core security state</h3>
+      <div class="e">
+        <div class="rail"><span class="std">Generic</span></div>
+        <div class="body"><span class="t">Isolation needs two things</span> — a privilege boundary that code cannot cross by choice, and a gate through which it can be crossed on request. Without both, memory protection is decoration: regions marked unprivileged mean nothing if everything runs privileged.</div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1189</span></div>
+        <div class="body"><span class="t">The exception vector base is a hijack target</span> on any architecture that lets you relocate it into writable memory. Keep it in read-only storage, or protect and periodically re-verify the copy.</div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI · ARMv7-M</span>
+        <div class="e"><div class="rail"><span class="std">CONTROL</span></div>
+          <div class="body">Thread mode can be unprivileged on the process stack; handlers are always privileged on the main stack; entry to the kernel goes through a supervisor call. Vector table base stays in flash.
+            <span class="atk">Deferred floating-point stacking leaves one task's registers live for the next. If a secret ever touches a floating-point register, disable it.</span>
+            <span class="note">There is no TrustZone on Cortex-M7 — that is an ARMv8-M feature. Claiming otherwise in an interview is an instant credibility loss.</span></div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+ · ARMv8-A</span>
+        <div class="e"><div class="rail"><span class="std">EL0–EL3</span></div>
+          <div class="body">Four exception levels: applications, kernel, hypervisor, and secure monitor — with ARM Trusted Firmware occupying the monitor level and mediating between the normal and secure worlds. The R5F cluster sits outside that hierarchy with its own protection unit and, optionally, lockstep execution.
+            <span class="mit">Map it out loud: unprivileged application, kernel, optional hypervisor for domain separation, secure monitor holding the crown jewels, and a real-time cluster the rich side cannot reach because the interconnect refuses its transactions. That paragraph is the answer to half the architecture questions you will get.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">3.05</span> Debug interfaces and readout</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1191</span></div>
+        <div class="body"><span class="t">An open debug port is the shortest path to everything.</span> It is the most common finding in embedded assessments and the easiest to fix late and forget.
+          <span class="mit">Close it for anything fielded, and understand the trade you are making: no failure analysis on returned units. Be able to argue both sides — that is a systems-engineering question wearing security clothes.</span></div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="e"><div class="rail"><span class="std">RDP</span></div>
+          <div class="body">Three readout-protection levels: open, flash unreadable while debug is attached with a mass erase on regression, and permanent disablement of debug and the system bootloader. Layer write protection over the bootloader sectors and execute-only protection over sensitive code.
+            <span class="note">Published research has broken readout protection on several families of this vendor's parts using voltage glitching and debug stepping. Defense in depth, never the sole reason a secret is safe.</span></div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+</span>
+        <div class="e"><div class="rail"><span class="std">eFUSE</span></div>
+          <div class="body">A fuse disables the debug interface outright, and the debug access port can be restricted rather than killed — an authenticated debug path exists, where a signed challenge re-opens access for an authorized party.
+            <span class="mit">Authenticated debug is the grown-up answer to the failure-analysis trade the MCU forces on you. If you can only remember one differentiator here, remember that one.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">3.06</span> Cryptographic engineering</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-323</span></div>
+        <div class="body"><span class="t">Nonce discipline is the whole security budget</span> of an authenticated-encryption construction. Counter plus per-direction salt, never repeating under a key, with a persistence story that survives power loss.
+          <span class="mit">Persist ahead of use with margin, or force a rekey on every reset. The second is simpler and easier to defend.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-208</span></div>
+        <div class="body"><span class="t">Tag comparison is never a byte-by-byte compare.</span> Accumulate the difference across all bytes, branch once on the accumulator.
+          <span class="atk">Early exit leaks the count of matching leading bytes, turning an infeasible forgery search into a byte-at-a-time walk.</span>
+          <span class="mit">Truncating a tag to fit a payload budget is a deliberate trade — document the per-attempt forgery probability, rate-limit failures, and count them.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">FIPS 140-3</span><span class="std">SP 800-88</span></div>
+        <div class="body"><span class="t">Zeroization is testable.</span> On session end, tamper, fault, and reset the key leaves memory — the arena, the stack frames the crypto ran in, and any staging buffer a peripheral could see.
+          <span class="mit">Audit it by halting after teardown and searching memory for the key bytes. If you find them, the feature is not done.</span></div>
+      </div>
+      <div class="panel plat p-stm32">
+        <span class="chip">STM32F767ZI</span>
+        <div class="e"><div class="rail"><span class="std">SP 800-232</span></div>
+          <div class="body">No accelerator, so everything is software and the choice is about side-channel posture and code size. Ascon-AEAD128 is table-free, which removes the cache-timing class outright; software AES would need bitslicing or masking to match, at more cycles and more code, for hardware benefit that does not exist on this part.
+            <span class="mit">Key schedule in uncached tightly-coupled memory. Derivation from a pre-shared root, sliding replay window on receive.</span></div></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+</span>
+        <div class="e"><div class="rail"><span class="std">CSU / A53</span></div>
+          <div class="body">Now you have three implementations of the same primitive: the security unit's engine, the A53 cryptography extensions, and software. They differ in throughput, in who can reach the key, and in side-channel exposure.
+            <span class="atk">The engine is not automatically safe. Power and electromagnetic analysis target hardware engines specifically, which is why key rolling exists as a countermeasure in the first place.</span>
+            <span class="mit">Choose by where the key must live, not by benchmark. A key that never leaves the security unit is worth more than throughput, and "the crypto is faster" is the wrong first sentence in a design review.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">3.07</span> Faults, forensics, and verification</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-209</span></div>
+        <div class="body"><span class="t">A fault is a security event.</span> Capture the class and faulting address, zeroize keys, reset. Do not attempt to continue.
+          <span class="atk">A handler that dumps registers over a debug port in a fielded build is a memory-disclosure oracle an attacker triggers deliberately.</span>
+          <span class="mit">Enable each fault class separately where the architecture allows it — letting everything escalate to a single catch-all throws away the classification that would have told you it was a protection violation.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">DO-178C</span></div>
+        <div class="body"><span class="t">Assurance vocabulary</span> — levels A through E by failure-condition severity, with modified condition/decision coverage required at the top level. You are not certifying anything; you are expected to use the words correctly. The hardware equivalent for programmable logic is a separate standard, which matters the moment the fabric does something safety-relevant.</div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">IEEE 12207</span></div>
+        <div class="body"><span class="t">Bidirectional traceability</span> — requirement to design to code to test and back. Every security requirement has at least one test that fails when it is violated. Orphan code and orphan tests are both findings.
+          <span class="mit">Threat model, then requirements derived from it, then tests, then code. A program audits the trace, not the cleverness.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">Red team</span></div>
+        <div class="body"><span class="t">Self-audit plan</span> — coverage-guided fuzzing of the parser on a host build, a timing harness on tag comparison and key derivation, a glitch thought experiment against boot verification, and a zeroization audit. Every finding gets a weakness identifier and a regression test.
+          <span class="note">Build the host-buildable seam now. A parser that only compiles for the target cannot be fuzzed later without a refactor.</span></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+ · added surface</span>
+        <div class="e"><div class="rail"><span class="std">Supply chain</span></div>
+          <div class="body">A Linux build is a dependency graph you inherited. Generate a software bill of materials, track vulnerabilities against the kernel and every recipe, and have a patch story for fielded units before anyone asks.
+            <span class="mit">The bitstream is also an asset: encrypt and authenticate it, because unprotected programmable logic is a design-theft and a fault-injection surface at once.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">3.08</span> Inter-processor communication</h3>
+      <div class="e">
+        <div class="rail"><span class="cwe">CWE-1189</span></div>
+        <div class="body"><span class="t">Every IPC channel is a trust boundary</span> — whether it crosses a radio link, a backplane, or two millimetres of silicon. The pattern is always shared memory plus a doorbell, and the failure is always the same: one side trusts the other because the same team wrote both.
+          <span class="mit">Validate on receipt regardless of who is nominally on the far end. No pointers in messages, no structs cast onto the buffer, bounded lengths, and a schema you can fuzz.</span></div>
+      </div>
+      <div class="panel plat p-zynq">
+        <span class="chip">Zynq UltraScale+</span>
+        <div class="e"><div class="rail"><span class="std">OpenAMP</span></div>
+          <div class="body">The framework to know by name, with the remote-processor lifecycle managed from Linux and message channels riding shared ring buffers signalled by inter-processor interrupts. Rings live in reserved memory that is uncached or explicitly maintained on both sides.
+            <span class="mit">Restrict which master may write which region and raise which doorbell in the interconnect firewalls. The channel is the boundary — protect it there, not in the message handler alone.</span></div></div>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span class="n">3.09</span> Process, clearance, export</h3>
+      <div class="e">
+        <div class="rail"><span class="std">Kanban</span></div>
+        <div class="body"><span class="t">Surface the work as a board</span> — backlog, threat modeled, in progress with a work-in-progress limit of one or two, in review, verified, done. A blocked column with the blocker named rather than implied.
+          <span class="mit">Definition of done for a security feature: requirement traced, a test that fails without the fix, static analysis clean, decision logged. Say "definition of done" out loud in a stand-up and it stops being vocabulary.</span></div>
+      </div>
+      <div class="e">
+        <div class="rail"><span class="std">ITAR / EAR</span></div>
+        <div class="body"><span class="t">Export control touches this work.</span> Cryptographic implementations and encryption-capable hardware variants carry obligations; a personal radio project is not a defense article, but the habit of separating personal and program repositories is exactly what a facility security officer will ask about.
+          <span class="mit">Start the interim clearance application early. The timeline is months and it is frequently the gating item on an offer.</span></div>
+      </div>
+    </article>
+
+    <article class="block drill">
+      <h3><span class="n">3.10</span> Interview drill — Sheet 3</h3>
+      <ol>
+        <li>Walk me through your chain of trust. Where is the root and is it immutable?
+          <span class="a"><span class="plat p-stm32">First-stage bootloader in write-protected flash, public key hash in one-time storage, signature over the application, rollback bits in one-way fuses. The root is software made practically immutable — weaker than a hardware ROM, and I can name what I would gain on a part that has one.</span><span class="plat p-zynq">Immutable ROM in the security unit authenticates the first-stage loader with a fused public key hash, locks the security resources, and hands the chain forward. Secondary keys are revocable by identifier so a signing key can rotate without bricking the fleet. That is a genuine hardware root, not a software approximation.</span><span class="plat p-generic">Immutable first link holding a key or its hash in one-way storage, signature verification at every handoff, and a monotonic version check before control transfers.</span></span></li>
+        <li>Why is a CRC insufficient for verifying an image?
+          <span class="a">Unkeyed and linear — any modification is followed by a recomputation. Integrity against noise is not integrity against an adversary.</span></li>
+        <li>The image is correctly signed and it is an old version with a known bug. What stops it?
+          <span class="a">Nothing, without anti-rollback. A monotonic counter in storage the application cannot write, checked before handoff.</span></li>
+        <li>Secure boot versus measured boot — when do you need both?
+          <span class="a">Secure boot refuses locally; measured boot produces evidence a remote party can evaluate. You need both when someone off-device must decide whether to trust this unit — which on a fielded system is usually the actual requirement.</span></li>
+        <li class="plat p-zynq">Your boot ROM authenticates with RSA-4096 and cannot be changed. Is that CNSA 2.0 compliant?
+          <span class="a">No — the suite requires quantum-resistant firmware signing and RSA is not. The layered answer: keep vendor secure boot on, encrypt and minimize the first stage, and have it verify all operational firmware with a post-quantum scheme before execution.</span></li>
+        <li>Defend your authenticated-encryption choice with no accelerator available.
+          <span class="a">A table-free construction removes the cache-timing class outright and fits the code budget; software AES would need bitslicing or masking to reach the same posture for no hardware benefit that exists on the part.</span></li>
+      </ol>
+    </article>
+
+  </div>
+</section>
+
+<footer>
+  Rev B · 2026-07-29 · Generic core with STM32F767ZI and Zynq UltraScale+ (Kria K26/KV260) overlays.<br>
+  Rail citations are study pointers, not a compliance claim. Verify register detail against RM0410 for the STM32 and UG1085 for the MPSoC before you rely on it in a design review.<br>
+  Export note: encryption-capable variants and cryptographic implementation work carry EAR/ITAR obligations. Keep personal-project and program repositories separate from day one.
+</footer>
+
+</div>
+<script>
+(function(){
+  var root=document.documentElement;
+  var btns=Array.prototype.slice.call(document.querySelectorAll('.modebtn'));
+  function set(m){
+    root.className='mode-'+m;
+    btns.forEach(function(b){b.setAttribute('aria-pressed', b.dataset.mode===m ? 'true':'false');});
+  }
+  btns.forEach(function(b){b.addEventListener('click',function(){set(b.dataset.mode);});});
+})();
+</script>
+</body>
+</html>
