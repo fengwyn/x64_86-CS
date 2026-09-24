@@ -1,0 +1,60 @@
+# fix_paths_from_a53.ps1
+# Rewrites old pkgs_v2 layer paths in the R5 source build, using the correct
+# paths Workbench generated for this install in the A53 source build.
+# Only path strings change; layer version names are left as they are.
+# Dry run:  powershell -NoProfile -ExecutionPolicy Bypass -File fix_paths_from_a53.ps1
+# Apply:    add -Apply   (each changed file is first copied to <file>.orig)
+param(
+    [string]$R5  = 'D:\AdvancedProjects\Secure_ZUSP\RTOS\rayZUSP_R5_UP_VSB',
+    [string]$A53 = 'D:\AdvancedProjects\Secure_ZUSP\RTOS\rayZUSP_A53_SMP_VSB',
+    [switch]$Apply
+)
+$enc    = New-Object System.Text.UTF8Encoding($false)      # no byte-order mark
+$pathRx = [regex]'VSBL_\w+_PATH\s*=\s*\$\(WIND_BASE\)/(\S+)'
+$map    = @{}      # old path (after $(WIND_BASE)/) -> new path
+$noPair = @()      # R5 layer files with no usable A53 counterpart
+
+# 1. Pair each R5 vsbl file with the A53 file of the same name
+foreach ($f in Get-ChildItem (Join-Path $R5 'vsbl') -Filter 'vsbl_*.mk') {
+    $old = @($pathRx.Matches([IO.File]::ReadAllText($f.FullName)) |
+        ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -like 'pkgs_v2/*' })
+    if ($old.Count -eq 0) { continue }
+    $twin = Join-Path (Join-Path $A53 'vsbl') $f.Name
+    $new  = @()
+    if (Test-Path -LiteralPath $twin) {
+        $new = @($pathRx.Matches([IO.File]::ReadAllText($twin)) |
+            ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notlike 'pkgs_v2/*' })
+    }
+    if ($new.Count -eq 1) { foreach ($o in $old) { $map[$o] = $new[0] } }
+    else { $noPair += $f.Name }
+}
+
+Write-Host "Path pairs found: $($map.Count)"
+foreach ($k in ($map.Keys | Sort-Object)) { Write-Host "  $k  ->  $($map[$k])" }
+if ($noPair.Count) {
+    Write-Host "No A53 match, fix these by hand: $($noPair -join ', ')" -ForegroundColor Yellow
+}
+
+# 2. Text files in the R5 source build that still mention pkgs_v2
+#    (skips .orig/.old/.bak backups, the _stale folder, and binary files)
+$files = @(Get-ChildItem -LiteralPath $R5 -Recurse -File -Force |
+    Where-Object { $_.Extension -notin '.orig', '.old', '.bak' -and $_.FullName -notlike '*\_stale\*' } |
+    Where-Object { $t = [IO.File]::ReadAllText($_.FullName); $t.Contains('pkgs_v2') -and $t.IndexOf([char]0) -lt 0 })
+
+# 3. Replace exact old paths with new ones, longest first
+$keys = @($map.Keys | Sort-Object Length -Descending)
+Write-Host ""
+Write-Host "Files:"
+foreach ($f in $files) {
+    $text = [IO.File]::ReadAllText($f.FullName)
+    $out  = $text
+    foreach ($k in $keys) { $out = $out.Replace($k, $map[$k]) }
+    $left = ([regex]::Matches($out, 'pkgs_v2')).Count
+    Write-Host ("  {0}   (pkgs_v2 left after fix: {1})" -f $f.FullName.Substring($R5.Length), $left)
+    if ($Apply -and $out -ne $text) {
+        Copy-Item -LiteralPath $f.FullName -Destination "$($f.FullName).orig" -Force
+        [IO.File]::WriteAllText($f.FullName, $out, $enc)
+    }
+}
+if ($Apply) { Write-Host "Done. Clean and rebuild the source build in Workbench." }
+else        { Write-Host "Dry run: nothing changed. Add -Apply to write." }
